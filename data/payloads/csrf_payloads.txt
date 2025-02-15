@@ -1,0 +1,4 @@
+# csrf_payloads.txt
+fake_token_123
+invalid_token
+blahblah

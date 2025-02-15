@@ -8,7 +8,7 @@ main.py
 3) Если указано --list-modules, выводим список модулей и завершаем.
 4) Инициализируем компоненты (requester, authenticator, crawler).
 5) Краулер обходит сайт, собирает ссылки и формы.
-6) Проверяем уязвимости (SQL Injection, XSS, etc.) если выбраны в --modules.
+6) Проверяем уязвимости (SQL Injection, XSS, CSRF, etc.) если выбраны в --modules.
 7) Выводим результаты, при необходимости формируем отчёт.
 """
 
@@ -29,6 +29,10 @@ from src.modules.xss.reflected import ReflectedXSSScanner
 from src.modules.xss.stored import StoredXSSScanner
 from src.modules.xss.dom_based import DomBasedXSSScanner
 
+# Импортируем CSRF сканер (пример BasicCSRFScanner)
+from src.modules.csrf.csrf_scanner import BasicCSRFScanner
+
+
 def main():
     # 1) Парсим аргументы командной строки
     args = parse_arguments()
@@ -40,17 +44,20 @@ def main():
         no_color=args.no_color
     )
 
-    # 3) --list-modules: выводим список доступных уязвимостей и выходим
+    # 3) Создаём словарь доступных модулей,
+    #    чтобы при --list-modules и "all" использовать автоматически.
+    module_handlers = {
+        "sql_injection": run_sql_injection_scanners,
+        "xss": run_xss_scanners,
+        "csrf": run_csrf_scanner
+        # "nosql_injection": run_nosql_injection_scanner,
+        # ...
+    }
+
+    # Если пользователь просит --list-modules, показываем и выходим
     if args.list_modules:
-        available_modules = [
-            "sql_injection",
-            "xss",
-            # "nosql_injection",
-            # "csrf",
-            # ... другие
-        ]
         logger.info("Available modules:")
-        for m in available_modules:
+        for m in module_handlers.keys():
             logger.info(f"- {m}")
         sys.exit(0)
 
@@ -61,7 +68,7 @@ def main():
         user_agent=args.user_agent
     )
 
-    # (Опционально аутентификация, если есть класс Authenticator):
+    # (Опционально аутентификация)
     # authenticator = None
     # if args.auth:
     #     authenticator = Authenticator(requester, args.auth)
@@ -86,36 +93,31 @@ def main():
     for link in found_urls:
         logger.info(f" - {link}")
 
-    # Если формы извлекаются:
-    if hasattr(crawler, "found_forms"):
-        logger.info(f"Found {len(crawler.found_forms)} forms total.")
-        for f in crawler.found_forms:
+    found_forms = getattr(crawler, "found_forms", [])
+    if found_forms:
+        logger.info(f"Found {len(found_forms)} forms total.")
+        for f in found_forms:
             logger.info(f"FORM: method={f['method']}, action={f['action']}, inputs={f['inputs']}")
 
     # 6) Проверка на уязвимости
     results = []
 
-    # Разбираем modules
+    # Если modules=all, то берём все, иначе разбиваем
     if args.modules == "all":
-        chosen_modules = ["sql_injection", "xss"]
+        chosen_modules = list(module_handlers.keys())
     else:
         chosen_modules = args.modules.split(",")
 
-    # Запуск SQL Injection
-    if "sql_injection" in chosen_modules:
-        sqli_results = run_sql_injection_scanners(
-            requester, logger, found_urls, getattr(crawler, "found_forms", [])
-        )
-        results.extend(sqli_results)
+    for mod in chosen_modules:
+        mod = mod.strip()
+        handler = module_handlers.get(mod)
+        if handler:
+            mod_results = handler(requester, logger, found_urls, found_forms)
+            results.extend(mod_results)
+        else:
+            logger.warn(f"Module '{mod}' not recognized or not implemented.")
 
-    # Запуск XSS
-    if "xss" in chosen_modules:
-        xss_results = run_xss_scanners(
-            requester, logger, found_urls, getattr(crawler, "found_forms", [])
-        )
-        results.extend(xss_results)
-
-    # 7) Считаем и выводим итоги
+    # 7) Итог
     if results:
         logger.info(f"Found {len(results)} vulnerabilities.")
         if not args.output and not args.quiet:
@@ -125,9 +127,8 @@ def main():
         if not args.quiet:
             logger.info("No vulnerabilities.")
 
-    # Если указан --output, формируем отчёт
+    # --output => Report
     if args.output:
-        # При условии, что есть ReportGenerator
         report_gen = ReportGenerator(report_format=args.report)
         report_gen.generate(results, output_file=args.output)
         logger.info(f"Report saved to {args.output}")
@@ -152,13 +153,14 @@ def run_sql_injection_scanners(requester, logger, urls, forms):
         sqli_results.extend(r_forms)
     return sqli_results
 
+
 def run_xss_scanners(requester, logger, urls, forms):
     """
     Запускает сканеры XSS (Reflected, Stored, DOM-based).
     """
     scanners = [
         ReflectedXSSScanner(requester, logger),
-        StoredXSSScanner(requester, logger, verify_url=None),  # при желании передать verify_url
+        StoredXSSScanner(requester, logger),
         DomBasedXSSScanner(requester, logger)
     ]
 
@@ -171,6 +173,26 @@ def run_xss_scanners(requester, logger, urls, forms):
     return xss_results
 
 
+def run_csrf_scanner(requester, logger, urls, forms):
+    """
+    Запускает CSRF-сканер (например, BasicCSRFScanner).
+    """
+    from src.modules.csrf.csrf_scanner import BasicCSRFScanner
+
+    scanners = [
+        BasicCSRFScanner(requester, logger)
+        # Если захотите сделать несколько видов CSRF-сканеров, добавьте их сюда
+    ]
+
+    csrf_results = []
+    for scanner in scanners:
+        r_urls = scanner.scan_urls(urls)
+        csrf_results.extend(r_urls)
+        r_forms = scanner.scan_forms(forms)
+        csrf_results.extend(r_forms)
+    return csrf_results
+
+
 def print_results_to_console(results, logger):
     """
     Выводим детальные результаты в консоль (если не quiet).
@@ -180,6 +202,7 @@ def print_results_to_console(results, logger):
         module = r.get("module")
         payload = r.get("payload")
 
+        # Boolean-based SQLi
         if module == "boolean_based_sqli":
             payload_true = r.get("payload_true")
             payload_false = r.get("payload_false")
@@ -190,21 +213,28 @@ def print_results_to_console(results, logger):
                         f"URLs: {url_true}, {url_false}")
             continue
 
+        # Time-based SQLi
         if module == "time_based_sqli":
             observed_delay = r.get("observed_delay", 0)
             logger.info(f"[{module.upper()}] Found vulnerability with payload '{payload}'. "
                         f"Delay observed: {observed_delay} s. URL/form: {r.get('url') or r.get('form_action')}")
             continue
 
-        # Пример вывода для XSS
+        # XSS
         if module in ["reflected_xss", "stored_xss", "dom_based_xss"]:
-            # Для stored может быть verify_url
             verify = r.get("verify_url")
             if verify:
                 logger.info(f"[{module.upper()}] Found stored XSS, payload '{payload}', check {verify}")
             else:
                 logger.info(f"[{module.upper()}] Found vulnerability with payload '{payload}' "
                             f"at {r.get('url') or r.get('form_action')}")
+            continue
+
+        # CSRF
+        if module == "csrf":
+            issue = r.get("issue", "CSRF check failed")
+            # example: "No CSRF token found" or "Server accepted request without token"
+            logger.info(f"[CSRF] {issue} at form: {r.get('form_action')}")
             continue
 
         # Ошибки SQLi (error_based) или прочие
