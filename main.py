@@ -33,6 +33,7 @@ from src.modules.directory_traversal import DirectoryTraversalScanner
 from src.modules.rce.command_injection import CommandInjectionScanner
 from src.modules.rce.code_injection import CodeInjectionScanner
 from src.modules.open_redirect import OpenRedirectScanner
+from src.modules.idor import IDORScanner
 
 
 def main():
@@ -56,6 +57,7 @@ def main():
         "directory_traversal": run_directory_traversal_scanner,
         "rce": run_rce_scanners,
         "open_redirect": run_open_redirect_scanner,
+        "idor": run_idor_scanner,
         # ...
     }
 
@@ -289,6 +291,13 @@ def run_rce_scanners(requester, logger, urls, forms):
 
 def run_open_redirect_scanner(requester, logger, urls, forms):
     scanner = OpenRedirectScanner(requester, logger)
+    results = []
+    results.extend(scanner.scan_urls(urls))
+    results.extend(scanner.scan_forms(forms))
+    return results
+
+def run_idor_scanner(requester, logger, urls, forms):
+    scanner = IDORScanner(requester, logger)
     results = []
     results.extend(scanner.scan_urls(urls))
     results.extend(scanner.scan_forms(forms))
