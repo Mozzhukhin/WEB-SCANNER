@@ -1,1 +1,4 @@
-from .nosql_injection import NoSQLiScanner
+# __init__.py
+from .nosql_helpers import NoSQLiScanner
+from .simple_nosql import SimpleNoSQLiScanner
+from .advanced_nosql import AdvancedNoSQLiScanner

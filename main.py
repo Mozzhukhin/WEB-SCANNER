@@ -24,6 +24,9 @@ from src.modules.sql_injection.error_based import ErrorBasedSQLiScanner
 from src.modules.sql_injection.boolean_based import BooleanBasedSQLiScanner
 from src.modules.sql_injection.time_based import TimeBasedSQLiScanner
 
+from src.modules.nosql_injection.simple_nosql import SimpleNoSQLiScanner
+from src.modules.nosql_injection.advanced_nosql import AdvancedNoSQLiScanner
+
 # Импортируем XSS сканеры
 from src.modules.xss.reflected import ReflectedXSSScanner
 from src.modules.xss.stored import StoredXSSScanner
@@ -31,6 +34,8 @@ from src.modules.xss.dom_based import DomBasedXSSScanner
 
 # Импортируем CSRF сканер (пример BasicCSRFScanner)
 from src.modules.csrf.csrf_scanner import BasicCSRFScanner
+
+
 
 
 def main():
@@ -49,8 +54,8 @@ def main():
     module_handlers = {
         "sql_injection": run_sql_injection_scanners,
         "xss": run_xss_scanners,
-        "csrf": run_csrf_scanner
-        # "nosql_injection": run_nosql_injection_scanner,
+        "csrf": run_csrf_scanner,
+        "nosql_injection": run_nosql_injection_scanners,
         # ...
     }
 
@@ -241,6 +246,22 @@ def print_results_to_console(results, logger):
         url = r.get("url") or r.get("form_action")
         logger.info(f"[{module.upper()}] Found vulnerability at {url} with payload {payload}")
 
+def run_nosql_injection_scanners(requester, logger, urls, forms):
+    """
+    Запускает SimpleNoSQLiScanner и AdvancedNoSQLiScanner.
+    """
+    scanners = [
+        SimpleNoSQLiScanner(requester, logger),
+        AdvancedNoSQLiScanner(requester, logger, delay_threshold=2.0)
+    ]
+
+    results = []
+    for scanner in scanners:
+        r_urls = scanner.scan_urls(urls)
+        results.extend(r_urls)
+        r_forms = scanner.scan_forms(forms)
+        results.extend(r_forms)
+    return results
 
 if __name__ == "__main__":
     main()

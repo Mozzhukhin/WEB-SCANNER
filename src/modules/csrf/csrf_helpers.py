@@ -20,7 +20,7 @@ class CSRFScanner:
     def _default_payloads_path(self):
         # Путь по умолчанию, например /data/payloads/csrf_payloads.txt
         base_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../../..")
+            os.path.join(os.path.dirname(__file__), "../../../")
         )
         return os.path.join(base_dir, "data", "payloads", "csrf_payloads.txt")
 
