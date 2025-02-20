@@ -1,120 +1,112 @@
 # coding: utf-8
 """
-Файл: report_generator.py
---------------------------
-Назначение:
-Этот модуль отвечает за генерацию отчётов о найденных уязвимостях в разных форматах:
-- TXT (текстовый)
-- HTML
-- CSV
-
-Принцип работы:
-- Принимает список результатов (список словарей, каждый словарь описывает уязвимость).
-  Формат результата может быть примерно таким:
-  [
-    {"module": "sql_injection", "url": "http://example.com/search", "payload": "' OR '1'='1"},
-    {"module": "xss", "url": "http://example.com/search", "payload": "<script>alert(1)</script>"}
-  ]
-
-- В зависимости от выбранного формата:
-  * TXT: Выводит текстовое перечисление
-  * HTML: Генерирует простой HTML с таблицей
-  * CSV: Генерирует данные через запятую
-
-- Сохраняет результат в указанный файл (если файл не указан, может вернуть строку).
-
-Комментарии на русском, вывод формируется на английском, чтобы отчет был понятен широкому кругу специалистов.
+report_generator.py
+-------------------
+Генератор отчётов (ReportGenerator), который умеет создавать отчёт
+в нескольких форматах: TXT, CSV, HTML.
+Вызывается из main.py:
+    report_gen = ReportGenerator(report_format=args.report)
+    report_gen.generate(results, output_file=args.output)
 """
 
+import csv
+import html
 
 class ReportGenerator:
     def __init__(self, report_format="txt"):
         """
-        Инициализация генератора отчётов.
-        report_format: txt, html или csv.
+        :param report_format: "txt" (по умолчанию), "csv", "html"
         """
         self.report_format = report_format.lower()
 
-    def generate(self, results, output_file=None):
+    def generate(self, results, output_file):
         """
-        Генерирует отчёт в заданном формате.
-
-        Параметры:
-        results (list): Список уязвимостей.
-        output_file (str): Путь к файлу, в который сохранить отчёт.
-                           Если None, вернёт строку с результатом.
-
-        Возвращает:
-        str, если output_file=None, иначе None.
+        Генерирует отчёт в зависимости от self.report_format,
+        записывает в output_file (строка пути).
         """
-        if self.report_format == "txt":
-            content = self._generate_txt(results)
-        elif self.report_format == "html":
-            content = self._generate_html(results)
-        elif self.report_format == "csv":
-            content = self._generate_csv(results)
-        else:
-            # Если формат неизвестен, используем текстовый формат по умолчанию
-            content = self._generate_txt(results)
-
-        if output_file:
+        if not results:
+            # Если нечего писать, можно написать "No vulnerabilities"
+            # или просто создать пустой файл
             with open(output_file, "w", encoding="utf-8") as f:
-                f.write(content)
-            return None
+                f.write("No vulnerabilities found.\n")
+            return
+
+        if self.report_format == "txt":
+            self._generate_txt(results, output_file)
+        elif self.report_format == "csv":
+            self._generate_csv(results, output_file)
+        elif self.report_format == "html":
+            self._generate_html(results, output_file)
         else:
-            return content
+            # Если формат не распознан, fallback: txt
+            self._generate_txt(results, output_file)
 
-    def _generate_txt(self, results):
+    def _generate_txt(self, results, output_file):
         """
-        Генерация простого текстового отчёта.
+        Записываем простой текстовый отчёт.
         """
-        if not results:
-            return "No vulnerabilities found.\n"
-        lines = ["Vulnerability Report (TXT format):\n"]
-        for r in results:
-            line = f"- Module: {r['module']} | URL: {r['url']} | Payload: {r['payload']}"
-            lines.append(line)
-        return "\n".join(lines) + "\n"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("Vulnerabilities Report (TXT)\n")
+            f.write("--------------------------------\n\n")
+            for i, r in enumerate(results, start=1):
+                module = r.get("module", "unknown").upper()
+                url = r.get("url") or r.get("form_action")
+                payload = r.get("payload") or r.get("test_value") or ""
+                issue = r.get("issue", "")
+                f.write(f"{i}) [{module}] {issue}\n")
+                f.write(f"   URL: {url}\n")
+                if payload:
+                    f.write(f"   Payload: {payload}\n")
+                f.write("\n")
 
-    def _generate_html(self, results):
+    def _generate_csv(self, results, output_file):
         """
-        Генерация HTML отчёта.
+        CSV-формат: поля [Module,Issue,URL,Payload,...].
+        Можно расширять.
         """
-        if not results:
-            return "<html><head><title>Report</title></head><body><h1>No Vulnerabilities Found</h1></body></html>"
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            # Заголовки
+            writer.writerow(["Module", "Issue", "URL", "Payload"])
+            for r in results:
+                module = r.get("module", "unknown")
+                issue = r.get("issue", "")
+                url = r.get("url") or r.get("form_action") or ""
+                payload = r.get("payload") or r.get("test_value") or ""
+                writer.writerow([module, issue, url, payload])
 
-        html_head = (
-            "<html><head><meta charset='UTF-8'>"
-            "<title>Vulnerability Report</title>"
-            "<style>table{border-collapse:collapse;width:100%;}"
-            "th,td{border:1px solid #ccc;padding:8px;text-align:left;}"
-            "th{background:#eee;}</style>"
-            "</head><body>"
-        )
-        html_title = "<h1>Vulnerability Report (HTML format)</h1>"
-        html_table_start = "<table><tr><th>Module</th><th>URL</th><th>Payload</th></tr>"
-        html_rows = []
-        for r in results:
-            row = f"<tr><td>{r['module']}</td><td>{r['url']}</td><td>{r['payload']}</td></tr>"
-            html_rows.append(row)
-        html_table_end = "</table>"
-        html_end = "</body></html>"
-
-        return html_head + html_title + html_table_start + "".join(html_rows) + html_table_end + html_end
-
-    def _generate_csv(self, results):
+    def _generate_html(self, results, output_file):
         """
-        Генерация CSV отчёта.
-        Столбцы: module,url,payload
+        Генерируем простой HTML-отчёт.
         """
-        import csv
-        from io import StringIO
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("<!DOCTYPE html>\n<html>\n<head>\n")
+            f.write("<meta charset='utf-8'/>\n")
+            f.write("<title>Vulnerabilities Report (HTML)</title>\n")
+            f.write("</head>\n<body>\n")
+            f.write("<h1>Vulnerabilities Report</h1>\n")
+            f.write("<table border='1' cellpadding='5' cellspacing='0'>\n")
+            f.write("<tr><th>#</th><th>Module</th><th>Issue</th><th>URL</th><th>Payload</th></tr>\n")
 
-        output = StringIO()
-        writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
+            for i, r in enumerate(results, start=1):
+                module = r.get("module", "unknown")
+                issue = r.get("issue", "")
+                url = r.get("url") or r.get("form_action") or ""
+                payload = r.get("payload") or r.get("test_value") or ""
 
-        writer.writerow(["module", "url", "payload"])  # Заголовки
-        for r in results:
-            writer.writerow([r['module'], r['url'], r['payload']])
+                # Экранируем HTML
+                module_esc = html.escape(module)
+                issue_esc = html.escape(issue)
+                url_esc = html.escape(url)
+                payload_esc = html.escape(payload)
 
-        return output.getvalue()
+                f.write("<tr>")
+                f.write(f"<td>{i}</td>")
+                f.write(f"<td>{module_esc}</td>")
+                f.write(f"<td>{issue_esc}</td>")
+                f.write(f"<td>{url_esc}</td>")
+                f.write(f"<td>{payload_esc}</td>")
+                f.write("</tr>\n")
+
+            f.write("</table>\n</body>\n</html>\n")
+
