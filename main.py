@@ -35,6 +35,7 @@ from src.modules.rce.code_injection import CodeInjectionScanner
 from src.modules.open_redirect import OpenRedirectScanner
 from src.modules.idor import IDORScanner
 from src.modules.ssrf import SSRFScanner
+from src.modules.file_upload import FileUploadScanner
 
 
 def main():
@@ -60,6 +61,7 @@ def main():
         "open_redirect": run_open_redirect_scanner,
         "idor": run_idor_scanner,
         "ssrf": run_ssrf_scanner,
+        "insecure_file_upload": run_insecure_file_upload_scanner
         # ...
     }
 
@@ -312,6 +314,13 @@ def run_ssrf_scanner(requester, logger, urls, forms):
     results.extend(scanner.scan_forms(forms))
     return results
 
+
+def run_insecure_file_upload_scanner(requester, logger, urls, forms):
+    scanner = FileUploadScanner(requester, logger)
+    results = []
+    results.extend(scanner.scan_urls(urls))
+    results.extend(scanner.scan_forms(forms))
+    return results
 
 if __name__ == "__main__":
     main()

@@ -22,11 +22,10 @@ class LinkAndFormExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self.links = []       # Ссылки, найденные в <a href="...">
-        self.forms = []       # Список форм, каждая — словарь с ключами: method, action, inputs
+        self.forms = []       # Список форм, каждая — словарь с ключами: method, action, inputs, enctype
         self._current_form = None  # Временное хранилище для данных о форме, пока не встретим следующий <form>
 
     def handle_starttag(self, tag, attrs):
-        # Приводим имя тега к нижнему регистру
         tag = tag.lower()
 
         if tag == "a":
@@ -39,14 +38,21 @@ class LinkAndFormExtractor(HTMLParser):
             # Начало формы: создаём новую структуру
             form_method = "get"
             form_action = ""
+            form_enctype = ""   # <-- добавили ентайп
+
             for (attr, value) in attrs:
-                if attr.lower() == "method" and value:
+                attr_lower = attr.lower()
+                if attr_lower == "method" and value:
                     form_method = value.lower()
-                if attr.lower() == "action" and value:
+                elif attr_lower == "action" and value:
                     form_action = value
+                elif attr_lower == "enctype" and value:
+                    form_enctype = value.lower()
+
             self._current_form = {
                 "method": form_method,
                 "action": form_action,
+                "enctype": form_enctype,  # <-- сохраняем enctype
                 "inputs": []
             }
             self.forms.append(self._current_form)
@@ -57,14 +63,14 @@ class LinkAndFormExtractor(HTMLParser):
             input_type = "text"
             input_value = ""
             for (attr, value) in attrs:
-                attr = attr.lower()
-                if attr == "name":
+                attr_lower = attr.lower()
+                if attr_lower == "name":
                     input_name = value
-                elif attr == "type":
+                elif attr_lower == "type" and value:
                     input_type = value.lower()
-                elif attr == "value":
+                elif attr_lower == "value":
                     input_value = value
-            # Добавляем в текущую форму
+
             self._current_form["inputs"].append({
                 "name": input_name,
                 "type": input_type,
@@ -74,7 +80,6 @@ class LinkAndFormExtractor(HTMLParser):
         # При желании можно обрабатывать <textarea>, <select> и т.д.
 
     def handle_endtag(self, tag):
-        # Если встретили закрытие тега form — сбрасываем _current_form
         tag = tag.lower()
         if tag == "form" and self._current_form is not None:
             self._current_form = None
@@ -133,7 +138,6 @@ class Crawler:
                 continue
             self.visited.add(url)
 
-            # Проверяем домен и фильтры
             if not self._check_url_scope(url):
                 logging.debug(f"Skipping {url}, not in domain/scope/exclude.")
                 continue
@@ -149,10 +153,8 @@ class Crawler:
 
             # Извлекаем ссылки и формы
             found_links, found_forms = self._extract_links_and_forms(html_content, url)
-            # Сохраняем формы (дополняем общий список)
             self.found_forms.extend(found_forms)
 
-            # Если глубина ещё не достигнута, добавляем ссылки в очередь
             if current_depth < self.depth:
                 for link in found_links:
                     if link not in self.visited:
@@ -180,18 +182,9 @@ class Crawler:
             return None
 
     def _extract_links_and_forms(self, html_content: str, base_url: str):
-        """
-        Извлекает ссылки и формы из HTML-кода.
-        Ссылки приводим к абсолютным URL, фильтруем по домену и паттернам.
-        Формы сохраняем как есть, но action тоже приводим к абсолютному URL.
-
-        Возвращает:
-          (set_of_links, list_of_forms)
-        """
         parser = LinkAndFormExtractor()
         parser.feed(html_content)
 
-        # Преобразуем ссылки
         found_links = set()
         for link in parser.links:
             full_link = urllib.parse.urljoin(base_url, link)
@@ -199,27 +192,22 @@ class Crawler:
             if full_link and self._check_url_scope(full_link):
                 found_links.add(full_link)
 
-        # Преобразуем формы
         found_forms = []
         for form in parser.forms:
             action_abs = urllib.parse.urljoin(base_url, form["action"])
             action_abs = self._normalize_url(action_abs)
             if action_abs and self._check_url_scope(action_abs):
-                # Создаём копию формы с абсолютным action
                 new_form = {
                     "method": form["method"],
                     "action": action_abs,
-                    "inputs": form["inputs"]
+                    "inputs": form["inputs"],
+                    "enctype": form.get("enctype", "")  # переносим enctype
                 }
                 found_forms.append(new_form)
 
         return found_links, found_forms
 
     def _check_url_scope(self, url: str) -> bool:
-        """
-        Проверяем, принадлежит ли URL тому же домену, что и стартовый,
-        и соответствует ли scope/exclude паттернам.
-        """
         parsed = urllib.parse.urlparse(url)
         if parsed.netloc != self.start_domain:
             return False
@@ -233,14 +221,10 @@ class Crawler:
         return True
 
     def _normalize_url(self, url: str) -> Optional[str]:
-        """
-        Удаляем фрагмент (#...) и возвращаем итоговый URL,
-        или None, если URL некорректен.
-        """
         parsed = urllib.parse.urlparse(url)
         if not parsed.scheme or not parsed.netloc:
             return None
-        # Собираем обратно без фрагмента
+        # Удаляем фрагмент
         return urllib.parse.urlunparse(
             (parsed.scheme, parsed.netloc, parsed.path, parsed.params, parsed.query, "")
         )
