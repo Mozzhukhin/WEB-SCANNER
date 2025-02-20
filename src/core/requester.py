@@ -9,20 +9,15 @@
 - Пользовательского User-Agent (--user-agent)
 - Обработку редиректов, куки и прочих нюансов.
 
-Задачи:
-- Предоставить класс Requester, который умеет выполнять GET/POST-запросы.
-- Учитывать задержку между запросами (rate limiting).
-- Поддержать опциональный пользовательский User-Agent.
-- Позже можно расширить поддержкой SSL, куки, сессий.
+Новая доработка:
+- Сохраняем self.last_url (конечный URL после возможных редиректов).
+  Это позволит сканеру проверить, что мы в итоге ушли на внешний ресурс.
 
-Принцип работы:
-- При инициализации передаем параметры (timeout, delay, user_agent).
-- При каждом запросе, если delay > 0, делаем небольшую паузу.
-- Используем стандартные библиотеки Python для запросов (например, urllib).
-- Возвращаем текст ответа или код статуса.
-- Если нужно, в будущем реализуем логирование запросов, обработку ошибок.
-
-Комментарии на русском, код и имена переменных на английском.
+Принцип работы (не ломаем существующую логику!):
+- При инициализации: timeout, delay, user_agent, self.last_url=None
+- get/post: возвращаем текст ответа или None, как раньше
+- Если запрос прошёл, сохраняем self.last_url = response.geturl()
+- Если произошла ошибка/исключение, self.last_url = None
 """
 
 import time
@@ -38,7 +33,8 @@ class Requester:
         Параметры:
         timeout (float): Максимальное время ожидания ответа (в секундах).
         delay (float): Задержка перед выполнением каждого запроса (в секундах).
-        user_agent (str): Строка, используемая в заголовке User-Agent. Если None, используем дефолтный.
+        user_agent (str): Строка, используемая в заголовке User-Agent.
+                         Если None, используем дефолтный "WebVulnScanner/1.0".
         """
         if not user_agent:
             user_agent = "WebVulnScanner/1.0"
@@ -46,9 +42,11 @@ class Requester:
 
         self.timeout = timeout
         self.delay = delay
+        # Запомним user_agent (ещё раз, чтобы быть уверенными)
         self.user_agent = user_agent if user_agent else "WebVulnScanner/1.0"
-        # Можно добавить поддержку cookies и session при необходимости
-        # Пока оставляем простую реализацию.
+
+        # Новое поле: хранить конечный URL после 3xx-редиректов (если они были)
+        self.last_url = None
 
     def get(self, url):
         """
@@ -57,6 +55,8 @@ class Requester:
         Возвращает:
         str: Тело ответа (HTML, JSON и т.д.), если запрос успешен.
         None, если произошла ошибка.
+        После успешного запроса self.last_url = финальный URL (после редиректов).
+        Если ошибка, self.last_url = None.
         """
         # Перед запросом учитываем задержку
         if self.delay > 0:
@@ -67,13 +67,14 @@ class Requester:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
                 # Читаем ответ и декодируем
                 data = response.read().decode("utf-8", errors="replace")
+                # Сохраним финальный адрес
+                self.last_url = response.geturl()  # URL после возможного редиректа
                 return data
-        except urllib.error.HTTPError as e:
-            # Если сервер вернул ошибку (например, 404)
-            # Можно залогировать или вернуть None
+        except urllib.error.HTTPError:
+            self.last_url = None
             return None
-        except urllib.error.URLError as e:
-            # Проблемы с сетью, DNS и т.п.
+        except urllib.error.URLError:
+            self.last_url = None
             return None
 
     def post(self, url, data):
@@ -86,6 +87,7 @@ class Requester:
         Возвращает:
         str: Тело ответа, если запрос успешен.
         None, если произошла ошибка.
+        Аналогично, после успешного запроса self.last_url = финальный URL.
         """
         # Перед запросом учитываем задержку
         if self.delay > 0:
@@ -93,8 +95,6 @@ class Requester:
 
         encoded_data = None
         if data:
-            # Кодируем словарь в форму: key=value&key2=value2
-            # Используем urllib.parse.urlencode
             from urllib.parse import urlencode
             encoded_data = urlencode(data).encode("utf-8")
 
@@ -102,8 +102,12 @@ class Requester:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
                 data = response.read().decode("utf-8", errors="replace")
+                # Сохраним финальный адрес
+                self.last_url = response.geturl()
                 return data
         except urllib.error.HTTPError:
+            self.last_url = None
             return None
         except urllib.error.URLError:
+            self.last_url = None
             return None

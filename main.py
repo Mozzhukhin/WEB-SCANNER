@@ -23,23 +23,16 @@ from src.core.crawler import Crawler
 from src.modules.sql_injection.error_based import ErrorBasedSQLiScanner
 from src.modules.sql_injection.boolean_based import BooleanBasedSQLiScanner
 from src.modules.sql_injection.time_based import TimeBasedSQLiScanner
-
 from src.modules.nosql_injection.simple_nosql import SimpleNoSQLiScanner
 from src.modules.nosql_injection.advanced_nosql import AdvancedNoSQLiScanner
-
-# Импортируем XSS сканеры
 from src.modules.xss.reflected import ReflectedXSSScanner
 from src.modules.xss.stored import StoredXSSScanner
 from src.modules.xss.dom_based import DomBasedXSSScanner
-
-# Импортируем CSRF сканер (пример BasicCSRFScanner)
 from src.modules.csrf.csrf_scanner import BasicCSRFScanner
-
 from src.modules.directory_traversal import DirectoryTraversalScanner
-
 from src.modules.rce.command_injection import CommandInjectionScanner
 from src.modules.rce.code_injection import CodeInjectionScanner
-
+from src.modules.open_redirect import OpenRedirectScanner
 
 
 def main():
@@ -62,6 +55,7 @@ def main():
         "nosql_injection": run_nosql_injection_scanners,
         "directory_traversal": run_directory_traversal_scanner,
         "rce": run_rce_scanners,
+        "open_redirect": run_open_redirect_scanner,
         # ...
     }
 
@@ -253,7 +247,6 @@ def print_results_to_console(results, logger):
         logger.info(f"[{module.upper()}] Found vulnerability at {url} with payload {payload}")
 
 
-
 def run_nosql_injection_scanners(requester, logger, urls, forms):
     """
     Запускает SimpleNoSQLiScanner и AdvancedNoSQLiScanner.
@@ -272,13 +265,13 @@ def run_nosql_injection_scanners(requester, logger, urls, forms):
     return results
 
 
-
 def run_directory_traversal_scanner(requester, logger, urls, forms):
     scanner = DirectoryTraversalScanner(requester, logger)
     results = []
     results.extend(scanner.scan_urls(urls))
     results.extend(scanner.scan_forms(forms))
     return results
+
 
 def run_rce_scanners(requester, logger, urls, forms):
     scanners = [
@@ -292,6 +285,15 @@ def run_rce_scanners(requester, logger, urls, forms):
         r_forms = scanner.scan_forms(forms)
         results.extend(r_forms)
     return results
+
+
+def run_open_redirect_scanner(requester, logger, urls, forms):
+    scanner = OpenRedirectScanner(requester, logger)
+    results = []
+    results.extend(scanner.scan_urls(urls))
+    results.extend(scanner.scan_forms(forms))
+    return results
+
 
 if __name__ == "__main__":
     main()
