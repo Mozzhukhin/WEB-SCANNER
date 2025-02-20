@@ -34,6 +34,7 @@ from src.modules.rce.command_injection import CommandInjectionScanner
 from src.modules.rce.code_injection import CodeInjectionScanner
 from src.modules.open_redirect import OpenRedirectScanner
 from src.modules.idor import IDORScanner
+from src.modules.ssrf import SSRFScanner
 
 
 def main():
@@ -58,6 +59,7 @@ def main():
         "rce": run_rce_scanners,
         "open_redirect": run_open_redirect_scanner,
         "idor": run_idor_scanner,
+        "ssrf": run_ssrf_scanner,
         # ...
     }
 
@@ -298,6 +300,13 @@ def run_open_redirect_scanner(requester, logger, urls, forms):
 
 def run_idor_scanner(requester, logger, urls, forms):
     scanner = IDORScanner(requester, logger)
+    results = []
+    results.extend(scanner.scan_urls(urls))
+    results.extend(scanner.scan_forms(forms))
+    return results
+
+def run_ssrf_scanner(requester, logger, urls, forms):
+    scanner = SSRFScanner(requester, logger)
     results = []
     results.extend(scanner.scan_urls(urls))
     results.extend(scanner.scan_forms(forms))
